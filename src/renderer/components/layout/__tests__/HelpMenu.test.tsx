@@ -147,7 +147,7 @@ describe('HelpMenu', () => {
     await waitFor(() =>
       expect(mocks.ipcRequest).toHaveBeenCalledWith(
         'system.shell.open_website',
-        'https://github.com/CherryHQ/cherry-studio'
+        'https://github.com/Lruri-sc/cherry-studio'
       )
     )
     expect(mocks.openSmartMiniApp).not.toHaveBeenCalled()

@@ -201,7 +201,7 @@ const AboutSettings: FC = () => {
           <button
             type="button"
             aria-label={t('settings.about.repository')}
-            onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio')}
+            onClick={() => onOpenWebsite('https://github.com/Lruri-sc/cherry-studio')}
             className="inline-flex items-center justify-center rounded-md p-1 text-foreground transition-colors hover:bg-muted">
             <Github aria-hidden="true" className="size-5" />
           </button>
@@ -214,7 +214,7 @@ const AboutSettings: FC = () => {
             <button
               type="button"
               aria-label={t('settings.about.repository')}
-              onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio')}
+              onClick={() => onOpenWebsite('https://github.com/Lruri-sc/cherry-studio')}
               className="relative cursor-pointer">
               <span aria-hidden="true">
                 {appUpdateState.downloading && appUpdateState.downloadProgress > 0 && (
@@ -239,7 +239,7 @@ const AboutSettings: FC = () => {
               <button
                 type="button"
                 aria-label={t('settings.about.releases.title')}
-                onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio/releases')}
+                onClick={() => onOpenWebsite('https://github.com/Lruri-sc/cherry-studio/releases')}
                 className="mt-1.5">
                 <Badge className="cursor-pointer rounded-md border-primary/20 bg-primary/10 px-1.5 py-0 text-[11px] text-primary leading-4 transition-colors hover:bg-primary/15">
                   v{version}

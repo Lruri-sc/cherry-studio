@@ -99,7 +99,8 @@ export class AppUpdaterService extends BaseService {
     // Packaged builds use app-update.yml generated from electron-builder.yml;
     // development uses the repository's dev-app-update.yml.
     autoUpdater.forceDevUpdateConfig = !app.isPackaged
-    autoUpdater.autoDownload = application.get('PreferenceService').get('app.dist.auto_update.enabled')
+    // Fork: never download an upstream build over this one, whatever the stored preference says.
+    autoUpdater.autoDownload = false
     // Never auto-install on quit - user must explicitly click "Install Now"
     // Auto-install on quit can cause issues: unexpected updates on restart,
     // corruption if system shuts down during install, or app uninstall on force shutdown
@@ -337,6 +338,11 @@ export class AppUpdaterService extends BaseService {
   }
 
   public async checkForUpdates() {
+    // Fork: the only feed this app knows is the upstream one, and an upstream build would
+    // silently replace this fork. Report "up to date" without touching the network; new
+    // fork builds are published on the fork's GitHub Releases page.
+    return { currentVersion: app.getVersion(), updateInfo: null }
+    // biome-ignore lint/correctness/noUnreachable: kept as the upstream reference implementation
     try {
       return await this.performUpdateCheck()
     } catch (error) {

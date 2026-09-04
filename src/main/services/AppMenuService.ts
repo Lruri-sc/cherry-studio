@@ -164,14 +164,14 @@ export class AppMenuService extends BaseService {
             type: 'custom',
             label: t('appMenu.feedback'),
             click: () => {
-              void shell.openExternal('https://github.com/CherryHQ/cherry-studio/issues/new/choose')
+              void shell.openExternal('https://github.com/Lruri-sc/cherry-studio/issues/new/choose')
             }
           },
           {
             type: 'custom',
             label: t('appMenu.releases'),
             click: () => {
-              void shell.openExternal('https://github.com/CherryHQ/cherry-studio/releases')
+              void shell.openExternal('https://github.com/Lruri-sc/cherry-studio/releases')
             }
           }
         ]

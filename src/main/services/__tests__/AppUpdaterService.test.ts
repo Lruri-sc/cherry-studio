@@ -241,20 +241,11 @@ describe('AppUpdaterService', () => {
       expect(autoUpdater.channel).toBe(UpgradeChannel.BETA)
     })
 
-    it('applies the channel and request headers before checking for updates', async () => {
-      vi.mocked(autoUpdater.checkForUpdates).mockImplementation(async () => {
-        expect(autoUpdater.channel).toBe(UpgradeChannel.LATEST)
-        expect(autoUpdater.requestHeaders).toMatchObject({
-          'App-Version': 'v1.0.0',
-          'X-Edition': 'global',
-          'X-Region': 'global'
-        })
-        return null
-      })
-
-      await appUpdater.checkForUpdates()
-
-      expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce()
+    it('never reaches the updater feed, even on a manual check (fork)', async () => {
+      // The feed is upstream's; a successful check would offer the official build and
+      // overwrite this fork. Manual checks must report "up to date" without any I/O.
+      await expect(appUpdater.checkForUpdates()).resolves.toEqual({ currentVersion: '1.0.0', updateInfo: null })
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled()
     })
 
     it('fetches and validates release history through the managed release service', async () => {
