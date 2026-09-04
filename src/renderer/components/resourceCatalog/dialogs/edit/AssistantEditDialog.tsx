@@ -670,7 +670,8 @@ function SystemPromptSectionsField({
     form.setValue('systemPromptSections', next, { shouldDirty: true, shouldTouch: true })
   const setSection = (id: SystemPromptSectionId, text: string) => commit({ ...value, [id]: text })
   const resetSection = (id: SystemPromptSectionId) => {
-    const { [id]: _dropped, ...rest } = value
+    const rest = { ...value }
+    delete rest[id]
     commit(rest)
   }
   const savePreset = async (name: string) =>

@@ -31,7 +31,15 @@ pnpm install && pnpm rebuild:electron
 pnpm build:mac:arm64 -- -c.mac.type=development   # 用本机 Apple Development 证书签名，自用足够
 ```
 
-产物在 `dist/`。`appId` / `productName` 与官方版一致，直接替换 `/Applications/Cherry Studio.app` 即接管原有数据，无需迁移。签名 Team ID 变化会让 macOS 要求重新授予辅助功能 / 麦克风权限；GitHub Copilot 登录态需重登（`safeStorage` 加密）；服务商 API key 不受影响。换回官方版时数据可直接复用，仅上述新增设置会被官方版忽略。
+产物在 `dist/`。`appId` / `productName` 与官方版一致，直接替换 `/Applications/Cherry Studio.app` 即接管原有数据，无需迁移。签名 Team ID 变化会让 macOS 要求重新授予辅助功能 / 麦克风权限；GitHub Copilot 登录态需重登（`safeStorage` 加密）；服务商 API key 不受影响。
+
+### 与官方版互换须知
+
+- **数据不会被覆盖。** 两者共用同一个数据目录（`~/Library/Application Support/CherryStudio`）、同一套数据库结构（本 fork 未新增任何迁移），对话、话题、文件、偏好在两边都完整可用，来回切换无需备份或迁移。
+- **本 fork 新增的设置在官方版里只是不可见，不会被删除。** 「不重发思考内容」「附件内联上限」「Cherry 附加段」存于助手设置 JSON，两组预设存于偏好表；官方版读取时忽略这些键、保存时原样带回，换回 fork 后原样恢复。
+- **换回官方版后自动更新会恢复。** 官方版会按你原有的偏好重新开始检查并下载官方新版本，这是上游的正常行为。
+- **本 fork 内的「检查更新」永远显示已是最新。** 这是刻意的：它不连接任何更新源，以免被官方构建覆盖。升级 fork 请到本仓库 Releases 下载新版覆盖安装。
+- 两边签名身份不同，每次切换后 macOS 都会要求重新授予辅助功能 / 麦克风权限。
 
 ---
 
