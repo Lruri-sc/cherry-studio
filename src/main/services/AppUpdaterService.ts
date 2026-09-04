@@ -73,7 +73,7 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 // the same time don't all hit the update server on the same beat.
 const CHECK_JITTER_RATIO = 0.15
 // Short delay before the first check after startup, letting boot I/O settle.
-const INITIAL_CHECK_DELAY_MS = 5_000
+// const INITIAL_CHECK_DELAY_MS = 5_000 // fork: automatic checks disabled, see onAllReady
 // Backoff for consecutive check failures: 5/10/20/40min, capped at 60min — always
 // shorter than the normal cadence so a transient failure recovers sooner. Note
 // `computeBackoff` ignores `maxAttempts`; auto-check never gives up, so it is a
@@ -138,7 +138,9 @@ export class AppUpdaterService extends BaseService {
     if (!app.isPackaged || this.isPortable()) {
       return
     }
-    this.scheduleNextUpdateCheck(INITIAL_CHECK_DELAY_MS)
+    // Fork: no automatic update checks (releases.cherry-ai.com + updater feed).
+    // Manual "check for updates" in Settings still works.
+    // this.scheduleNextUpdateCheck(INITIAL_CHECK_DELAY_MS)
   }
 
   private registerAutoUpdaterListeners(): void {

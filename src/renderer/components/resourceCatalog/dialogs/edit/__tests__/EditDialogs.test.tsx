@@ -399,6 +399,14 @@ vi.mock('react-i18next', async (importOriginal) => {
           'library.config.basic.field.name.placeholder': 'Name this assistant',
           'library.config.basic.field.tags.hint': 'Group related assistants.',
           'library.config.basic.field.custom_params.hint': 'Extra provider parameters.',
+          'library.config.basic.custom_params_presets': 'Presets',
+          'library.config.basic.custom_params_preset_apply': 'Apply a preset',
+          'library.config.basic.custom_params_preset_save': 'Save as preset',
+          'library.config.basic.custom_params_preset_delete': 'Delete a preset',
+          'library.config.basic.custom_params_preset_empty': 'No presets yet',
+          'library.config.basic.custom_params_preset_name': 'Preset name',
+          'library.config.basic.custom_params_preset_save_title': 'Save as preset',
+          'library.config.basic.custom_params_preset_name_required': 'Enter a preset name',
           'library.config.basic.field.max_tokens.hint': 'Caps response length.',
           'library.config.basic.field.max_tool_calls.hint': 'Caps tool-call rounds at 1000.',
           'library.config.basic.field.stream_output.hint': 'Stream responses.',
@@ -414,6 +422,27 @@ vi.mock('react-i18next', async (importOriginal) => {
           'library.config.basic.model_not_found': 'Model {{id}} is unavailable.',
           'library.config.basic.precise': 'Precise',
           'library.config.basic.stream_output': 'Stream output',
+          'library.config.basic.attachment_inline_cap': 'Attachment inline limit',
+          'library.config.basic.field.attachment_inline_cap.hint': 'How much attachment text is inlined.',
+          'library.config.basic.attachment_inline_cap_default': 'Default',
+          'library.config.basic.attachment_inline_cap_custom': 'Custom',
+          'library.config.basic.attachment_inline_cap_unlimited': 'Unlimited',
+          'library.config.basic.attachment_inline_cap_chars': 'characters',
+          'library.config.basic.attachment_inline_cap_unlimited_warning': 'May exceed the context window.',
+          'library.config.prompt.sections.title': 'Cherry-added sections',
+          'library.config.prompt.sections.hint': 'Appended after your prompt.',
+          'library.config.prompt.sections.deferredTools.label': 'Deferred tools guide',
+          'library.config.prompt.sections.deferredTools.when': 'when tool_search is exposed',
+          'library.config.prompt.sections.citations.label': 'Citation rules',
+          'library.config.prompt.sections.citations.when': 'when a citable tool is exposed',
+          'library.config.prompt.sections.webSearchDate.label': 'Web search date',
+          'library.config.prompt.sections.webSearchDate.when': 'when web search is on',
+          'library.config.prompt.sections.status.modified': 'Modified',
+          'library.config.prompt.sections.status.disabled': 'Disabled',
+          'library.config.prompt.sections.restore': 'Restore default',
+          'library.config.prompt.sections.placeholder': 'Empty = remove this section',
+          'library.config.basic.strip_reasoning_in_history': "Don't resend thinking",
+          'library.config.basic.field.strip_reasoning_in_history.hint': 'Drops replayed thinking.',
           'library.config.basic.group': 'Group',
           'library.config.basic.group_empty': 'No groups',
           'library.config.basic.group_placeholder': 'Select group',
@@ -954,6 +983,91 @@ describe('edit dialogs', () => {
           name: 'Updated Assistant',
           description: 'Updated assistant description',
           modelId: MODEL.id
+        })
+      })
+    )
+  })
+
+  it('refuses to save an empty custom-parameter preset', async () => {
+    render(<AssistantEditDialog open resource={ASSISTANT} onOpenChange={vi.fn()} initialTab="advanced" />)
+
+    const presetsButton = screen.getByRole('button', { name: 'Presets' })
+    // Radix opens the menu from keyboard activation; jsdom's pointer events don't
+    // carry the capture APIs its pointerdown path needs.
+    fireEvent.keyDown(presetsButton, { key: 'Enter', code: 'Enter' })
+    // ASSISTANT carries no custom parameters: saving here would create a preset
+    // that silently wipes the list of whoever applies it.
+    expect(await screen.findByRole('menuitem', { name: 'Save as preset' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('menuitem', { name: 'No presets yet' })).toBeInTheDocument()
+  })
+
+  it('offers to save a preset once the assistant has custom parameters', async () => {
+    const withParams = {
+      ...ASSISTANT,
+      settings: {
+        ...ASSISTANT.settings,
+        customParameters: [{ name: 'prompt_cache_key', type: 'string' as const, value: 'k' }]
+      }
+    }
+    render(<AssistantEditDialog open resource={withParams} onOpenChange={vi.fn()} initialTab="advanced" />)
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Presets' }), { key: 'Enter', code: 'Enter' })
+    expect(await screen.findByRole('menuitem', { name: 'Save as preset' })).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('flags Cherry prompt sections as modified or disabled only when an override exists', () => {
+    const withOverrides = {
+      ...ASSISTANT,
+      settings: {
+        ...ASSISTANT.settings,
+        // citations frozen to custom text, web-search date removed, deferred tools left at default
+        systemPromptSections: { citations: 'cite it', webSearchDate: '' }
+      }
+    }
+    render(<AssistantEditDialog open resource={withOverrides} onOpenChange={vi.fn()} initialTab="prompt" />)
+
+    // Every section is listed with its trigger condition, regardless of override state.
+    expect(screen.getByText('Deferred tools guide')).toBeInTheDocument()
+    expect(screen.getByText('Citation rules')).toBeInTheDocument()
+    expect(screen.getByText('Web search date')).toBeInTheDocument()
+    // Status must derive from override presence: absent → no badge, text → Modified, '' → Disabled.
+    expect(screen.getAllByText('Modified')).toHaveLength(1)
+    expect(screen.getAllByText('Disabled')).toHaveLength(1)
+  })
+
+  it('submits the attachment inline policy and clears it with null when set back to default', async () => {
+    const unlimited = {
+      ...ASSISTANT,
+      settings: { ...ASSISTANT.settings, attachmentInlineCap: { mode: 'unlimited' as const } }
+    }
+    render(<AssistantEditDialog open resource={unlimited} onOpenChange={vi.fn()} initialTab="advanced" />)
+
+    const group = screen.getByRole('radiogroup', { name: 'Attachment inline limit' })
+    expect(within(group).getByRole('radio', { name: 'Unlimited' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('May exceed the context window.')).toBeInTheDocument()
+
+    // Back to default must clear the stored policy, not persist a 'default' value.
+    fireEvent.click(within(group).getByRole('radio', { name: 'Default' }))
+    await waitFor(() =>
+      expect(updateAssistantMock).toHaveBeenCalledWith({
+        body: expect.objectContaining({ settings: expect.objectContaining({ attachmentInlineCap: null }) })
+      })
+    )
+  })
+
+  it('submits the reasoning replay policy chosen in the model config tab', async () => {
+    render(<AssistantEditDialog open resource={ASSISTANT} onOpenChange={vi.fn()} initialTab="advanced" />)
+
+    const toggle = screen.getByRole('switch', { name: "Don't resend thinking" })
+    // An assistant that never touched the toggle must replay reasoning, or every
+    // existing thread would silently change what it sends the model.
+    expect(toggle).not.toBeChecked()
+
+    fireEvent.click(toggle)
+    await waitFor(() =>
+      expect(updateAssistantMock).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          settings: expect.objectContaining({ reasoningInHistory: 'strip' })
         })
       })
     )

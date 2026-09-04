@@ -31,6 +31,7 @@ import type { FileAttachmentRef } from '@main/ai/messages/attachmentTypes'
 import type { NativeFileSupport } from '@main/ai/runtime/aiSdk'
 import { surrogateSafeEnd } from '@main/ai/utils/textPaging'
 import { READ_FILE_PAGE_SIZE } from '@shared/ai/builtinTools'
+import type { AttachmentInlineCap } from '@shared/data/types/assistant'
 import type { FileUIPart } from '@shared/data/types/message'
 import { readCherryMeta } from '@shared/data/types/uiParts'
 import { FILE_TYPE, type FileType } from '@shared/types/file'
@@ -94,6 +95,8 @@ export interface PrepareChatContext {
   isToolCapable: boolean
   /** Shared token pool for inlined text. Absent → every file gets the flat page size. */
   budget?: AttachmentBudget
+  /** Assistant policy; when set it outranks both `budget` and the flat page size. */
+  inlineCap?: AttachmentInlineCap | null
   signal?: AbortSignal
 }
 
@@ -283,15 +286,23 @@ function defer(parts: UIMessage['parts'], pending: PendingInline[], handle: stri
 }
 
 function applyInlineCaps(pending: PendingInline[], ctx: PrepareChatContext): void {
-  const caps = ctx.budget
-    ? allocateInlineCaps(
-        pending.map((entry) => entry.body),
-        ctx.budget
-      )
-    : pending.map(() => READ_FILE_PAGE_SIZE)
+  const caps = resolveInlineCaps(pending, ctx)
 
   pending.forEach((entry, index) => {
     const capped = capInlineText(entry.handle, entry.body, ctx.isToolCapable, caps[index])
     entry.parts[entry.index] = { type: 'text', text: `Attached file "${entry.handle}":\n${capped}` }
   })
+}
+
+/** Assistant policy first; otherwise the upstream pool-or-flat-page rule. */
+function resolveInlineCaps(pending: PendingInline[], ctx: PrepareChatContext): number[] {
+  const policy = ctx.inlineCap
+  if (policy?.mode === 'unlimited') return pending.map(() => Number.POSITIVE_INFINITY)
+  if (policy?.mode === 'custom') return pending.map(() => policy.chars)
+  return ctx.budget
+    ? allocateInlineCaps(
+        pending.map((entry) => entry.body),
+        ctx.budget
+      )
+    : pending.map(() => READ_FILE_PAGE_SIZE)
 }

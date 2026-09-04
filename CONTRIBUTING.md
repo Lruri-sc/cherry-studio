@@ -28,7 +28,7 @@ Please make sure you have read the [Code of Conduct](CODE_OF_CONDUCT.md) and the
 
 Please refer to the [Developer Guide](docs/contrib/development.md) for instructions on setting up your local development environment, including prerequisites, installation steps, and available commands.
 
-For a comprehensive overview of the project architecture, tech stack, conventions, and available commands, see [`CLAUDE.md`](CLAUDE.md).
+For a comprehensive overview of the project architecture, tech stack, conventions, and available commands, see the [documentation index](docs/README.md).
 
 ## Getting Started
 

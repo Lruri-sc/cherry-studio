@@ -1,5 +1,7 @@
+import { READ_FILE_PAGE_SIZE } from '@shared/ai/builtinTools'
+import type { SystemPromptSectionsOverride } from '@shared/ai/systemPromptSections'
 import type { UpdateAssistantDto } from '@shared/data/api/schemas/assistants'
-import type { Assistant, AssistantSettings } from '@shared/data/types/assistant'
+import type { Assistant, AssistantSettings, AttachmentInlineCap } from '@shared/data/types/assistant'
 import { AssistantSettingsSchema, DEFAULT_ASSISTANT_SETTINGS, McpModeSchema } from '@shared/data/types/assistant'
 import { DEFAULT_CONTEXT_SETTINGS } from '@shared/data/types/contextSettings'
 
@@ -44,6 +46,13 @@ export interface AssistantFormState {
   enableMaxToolCalls: boolean
   customParameters: CustomParameter[]
   mcpMode: AssistantSettings['mcpMode']
+  /** Drop this thread's own reasoning from replayed assistant turns. */
+  stripReasoningInHistory: boolean
+  /** Overrides of the sections Cherry appends to the system prompt; {} = all defaults. */
+  systemPromptSections: SystemPromptSectionsOverride
+  /** 'default' = upstream rule; the chars field only matters in 'custom'. */
+  attachmentInlineCapMode: AttachmentInlineCap['mode'] | 'default'
+  attachmentInlineCapChars: number
   // context management (P2-D assistant override). `contextOverrideEnabled` is
   // the master switch for the OFFLOAD + COMPRESSION fields only.
   contextOverrideEnabled: boolean
@@ -92,6 +101,11 @@ export function initialAssistantFormState(assistant: Assistant): AssistantFormSt
     enableMaxToolCalls: settings.enableMaxToolCalls ?? true,
     customParameters: settings.customParameters ?? [],
     mcpMode: mcpMode.success ? mcpMode.data : DEFAULT_ASSISTANT_SETTINGS.mcpMode,
+    stripReasoningInHistory: settings.reasoningInHistory === 'strip',
+    systemPromptSections: { ...settings.systemPromptSections },
+    attachmentInlineCapMode: settings.attachmentInlineCap?.mode ?? 'default',
+    attachmentInlineCapChars:
+      settings.attachmentInlineCap?.mode === 'custom' ? settings.attachmentInlineCap.chars : READ_FILE_PAGE_SIZE,
     // Only an offload/compression field means "override": a lone maxMessages is
     // the scope control saved on its own.
     contextOverrideEnabled: ctx != null && (ctx.truncateThreshold !== undefined || ctx.compress !== undefined),
@@ -143,6 +157,11 @@ export function diffAssistantUpdate(
   assistant: Assistant
 ): AssistantDiffResult | null {
   const customParametersChanged = JSON.stringify(baseline.customParameters) !== JSON.stringify(form.customParameters)
+  const systemPromptSectionsChanged =
+    JSON.stringify(baseline.systemPromptSections) !== JSON.stringify(form.systemPromptSections)
+  const attachmentInlineCapChanged =
+    baseline.attachmentInlineCapMode !== form.attachmentInlineCapMode ||
+    (form.attachmentInlineCapMode === 'custom' && baseline.attachmentInlineCapChars !== form.attachmentInlineCapChars)
   const maxTokensChanged = baseline.maxTokens !== form.maxTokens
   const enableMaxTokensChanged = baseline.enableMaxTokens !== form.enableMaxTokens
   const contextSettingsChanged =
@@ -169,7 +188,22 @@ export function diffAssistantUpdate(
     ...(baseline.maxToolCalls !== form.maxToolCalls ? { maxToolCalls: form.maxToolCalls } : {}),
     ...(baseline.enableMaxToolCalls !== form.enableMaxToolCalls ? { enableMaxToolCalls: form.enableMaxToolCalls } : {}),
     ...(baseline.mcpMode !== form.mcpMode ? { mcpMode: form.mcpMode } : {}),
+    ...(baseline.stripReasoningInHistory !== form.stripReasoningInHistory
+      ? { reasoningInHistory: form.stripReasoningInHistory ? ('strip' as const) : ('keep' as const) }
+      : {}),
     ...(customParametersChanged ? { customParameters: form.customParameters } : {}),
+    ...(systemPromptSectionsChanged ? { systemPromptSections: form.systemPromptSections } : {}),
+    ...(attachmentInlineCapChanged
+      ? {
+          // null clears the policy back to the upstream rule.
+          attachmentInlineCap:
+            form.attachmentInlineCapMode === 'default'
+              ? null
+              : form.attachmentInlineCapMode === 'custom'
+                ? { mode: 'custom' as const, chars: form.attachmentInlineCapChars }
+                : { mode: 'unlimited' as const }
+        }
+      : {}),
     ...(contextSettingsChanged
       ? {
           // null clears the override; the `enabled` kill-switch stays global.

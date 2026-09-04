@@ -72,7 +72,8 @@ describe('MainWindowContent', () => {
       expect(screen.getByTestId('tabs-provider')).toBeInTheDocument()
       expect(screen.getByTestId('app-shell')).toBeInTheDocument()
       expect(screen.queryByTestId('onboarding-page')).not.toBeInTheDocument()
-      expect(screen.getByTestId('privacy-policy-gate')).toBeInTheDocument()
+      // Fork: the re-consent gate is no longer mounted after onboarding either.
+      expect(screen.queryByTestId('privacy-policy-gate')).not.toBeInTheDocument()
       expect(onboardingModule.evaluations).toBe(0)
       view.unmount()
     }

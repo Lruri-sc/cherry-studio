@@ -5,6 +5,7 @@
  * They store inference parameters, tool references, and context source toggles.
  */
 
+import { SystemPromptSectionsOverrideSchema } from '@shared/ai/systemPromptSections'
 import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk'
 import * as z from 'zod'
 
@@ -33,6 +34,21 @@ export const DEFAULT_MCP_MODE: McpMode = 'manual'
  *  falls back to the default at request time. */
 export const MIN_TOOL_CALLS = 1
 export const MAX_TOOL_CALLS = 1000
+
+/** How a replayed assistant turn carries its reasoning back to the model.
+ *  `keep` (the default) replays it; `strip` drops it from the next request — the
+ *  model still generates and bills reasoning, only the replay stops re-sending it. */
+/** How much of an attachment's extracted text is inlined into the prompt.
+ *  Absent/null = upstream behaviour (a pool sized to the model's context window, else a
+ *  flat 8000 chars); `custom` = a flat per-file character cap; `unlimited` = inline it all. */
+export const AttachmentInlineCapSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('custom'), chars: z.number().int().positive() }),
+  z.object({ mode: z.literal('unlimited') })
+])
+export type AttachmentInlineCap = z.infer<typeof AttachmentInlineCapSchema>
+
+export const ReasoningInHistorySchema = z.enum(['keep', 'strip'])
+export type ReasoningInHistory = z.infer<typeof ReasoningInHistorySchema>
 
 /**
  * Assistant settings — inference parameters + context source toggles.
@@ -94,7 +110,16 @@ export const AssistantSettingsSchema = z.object({
    *  `null` = inherit the global `chat.context_settings.*` preferences. `null`
    *  is the wire form for "clear the override" — JSON drops `undefined` keys,
    *  and the resolver's `??` chain treats null/undefined alike. */
-  contextSettings: ContextSettingsOverrideSchema.nullable().optional()
+  contextSettings: ContextSettingsOverrideSchema.nullable().optional(),
+
+  /** Reasoning replay policy. Absent = `keep`, i.e. the historical behaviour. */
+  reasoningInHistory: ReasoningInHistorySchema.optional(),
+
+  /** Per-section overrides of the prompt text Cherry appends; see `@shared/ai/systemPromptSections`. */
+  systemPromptSections: SystemPromptSectionsOverrideSchema.optional(),
+
+  /** Attachment inline cap policy. `null` is the wire form for "back to upstream default". */
+  attachmentInlineCap: AttachmentInlineCapSchema.nullable().optional()
 })
 export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>
 

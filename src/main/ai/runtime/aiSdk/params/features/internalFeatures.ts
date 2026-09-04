@@ -14,6 +14,7 @@
 import type { RequestFeature } from '../feature'
 import { anthropicCacheFeature } from './anthropicCache'
 import { anthropicHeadersFeature } from './anthropicHeaders'
+import { assistantReasoningReplayFeature } from './assistantReasoningReplay'
 import { contextBuildFeature } from './contextBuild'
 import { deepseekDsmlParserFeature } from './deepseekDsmlParserPlugin'
 import { deepseekResponsesReasoningReplayFeature } from './deepseekResponsesReasoningReplay'
@@ -59,6 +60,8 @@ export const INTERNAL_FEATURES: readonly RequestFeature[] = [
   skipGeminiThoughtSignatureFeature,
   // The HuggingFace router rejects reasoning input items — strip them on replay.
   stripReasoningReplayFeature,
+  // Assistant opt-in: stop replaying this thread's own reasoning drafts.
+  assistantReasoningReplayFeature,
   providerWebSearchFeature,
   providerUrlContextFeature,
   // Stop when a trusted local tool cannot succeed without an external change.

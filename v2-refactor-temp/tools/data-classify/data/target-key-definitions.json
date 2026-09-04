@@ -134,14 +134,21 @@
     {
       "targetKey": "chat.input.toolbar.pinned_tools",
       "type": "string[]",
-      "defaultValue": ["composer:new-conversation", "web-search"],
+      "defaultValue": [
+        "composer:new-conversation",
+        "web-search"
+      ],
       "status": "classified",
       "description": "Ordered tool ids pinned on the chat composer toolbar (v2 new feature, no v1 source)"
     },
     {
       "targetKey": "agent.input.toolbar.pinned_tools",
       "type": "string[]",
-      "defaultValue": ["composer:new-session", "skills", "permission-mode"],
+      "defaultValue": [
+        "composer:new-session",
+        "skills",
+        "permission-mode"
+      ],
       "status": "classified",
       "description": "Ordered tool ids pinned on the agent composer toolbar (v2 new feature, no v1 source)"
     },
@@ -170,11 +177,26 @@
       "targetKey": "ui.sidebar.favorites",
       "type": "PreferenceTypes.SidebarFavoriteItem[]",
       "defaultValue": [
-        { "id": "agents", "type": "app" },
-        { "id": "assistants", "type": "app" },
-        { "id": "translate", "type": "app" },
-        { "id": "paintings", "type": "app" },
-        { "id": "knowledge", "type": "app" }
+        {
+          "id": "agents",
+          "type": "app"
+        },
+        {
+          "id": "assistants",
+          "type": "app"
+        },
+        {
+          "id": "translate",
+          "type": "app"
+        },
+        {
+          "id": "paintings",
+          "type": "app"
+        },
+        {
+          "id": "knowledge",
+          "type": "app"
+        }
       ],
       "status": "classified",
       "description": "Left sidebar favorites, an ordered list of tagged items: built-in apps ({type:'app'}) and mini apps ({type:'mini_app'})"
@@ -738,7 +760,11 @@
       "targetKey": "shortcut.screenshot.capture",
       "type": "PreferenceTypes.PreferenceShortcutType",
       "defaultValue": {
-        "binding": ["CommandOrControl", "Shift", "A"],
+        "binding": [
+          "CommandOrControl",
+          "Shift",
+          "A"
+        ],
         "enabled": true
       },
       "status": "classified",
@@ -792,6 +818,34 @@
       "defaultValue": "none",
       "status": "classified",
       "description": "Reasoning effort for the translate model; 'none' reproduces the hardcoded behaviour that predates this setting (v2 new feature, no v1 source)"
+    },
+    {
+      "targetKey": "chat.custom_parameters.presets",
+      "type": "PreferenceTypes.CustomParameterPreset[]",
+      "defaultValue": [],
+      "status": "classified",
+      "description": "Named reusable sets of assistant custom parameters (v2 new feature, no v1 source)"
+    },
+    {
+      "targetKey": "app.dist.auto_update.enabled",
+      "type": "boolean",
+      "defaultValue": false,
+      "status": "classified",
+      "description": "Automatic update checks (fork default: off; manual check in Settings still available)"
+    },
+    {
+      "targetKey": "app.privacy.data_collection.enabled",
+      "type": "boolean",
+      "defaultValue": false,
+      "status": "classified",
+      "description": "Anonymous usage reporting (fork: disabled; AnalyticsService never activates)"
+    },
+    {
+      "targetKey": "chat.system_prompt_sections.presets",
+      "type": "PreferenceTypes.SystemPromptSectionsPreset[]",
+      "defaultValue": [],
+      "status": "classified",
+      "description": "Named reusable sets of Cherry system-prompt section overrides (v2 new feature, no v1 source)"
     }
   ]
 }

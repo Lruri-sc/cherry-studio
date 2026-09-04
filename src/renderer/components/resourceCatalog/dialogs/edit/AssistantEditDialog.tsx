@@ -1,5 +1,19 @@
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
   FormControl,
   FormField,
   FormItem,
@@ -37,7 +51,13 @@ import {
   diffAssistantSaveIntent,
   initialAssistantFormState
 } from '@renderer/utils/resourceCatalog'
+import { READ_FILE_PAGE_SIZE } from '@shared/ai/builtinTools'
 import { AGENT_PROMPT } from '@shared/ai/prompts'
+import {
+  SYSTEM_PROMPT_SECTION_DEFAULTS,
+  SYSTEM_PROMPT_SECTION_IDS,
+  type SystemPromptSectionId
+} from '@shared/ai/systemPromptSections'
 import { DEFAULT_ASSISTANT_SETTINGS, MAX_TOOL_CALLS, MIN_TOOL_CALLS } from '@shared/data/types/assistant'
 import {
   MAX_COMPRESS_THRESHOLD_PERCENT,
@@ -47,7 +67,7 @@ import {
 import type { Model, UniqueModelId } from '@shared/data/types/model'
 import { clampThresholdPercent } from '@shared/utils/contextSettings'
 import { isNonChatModel } from '@shared/utils/model'
-import { Sparkles, Trash2 } from 'lucide-react'
+import { BookmarkPlus, ChevronDown, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -99,6 +119,10 @@ type AssistantEditFormValues = {
   enableMaxToolCalls: boolean
   customParameters: AssistantFormState['customParameters']
   mcpMode: AssistantFormState['mcpMode']
+  stripReasoningInHistory: boolean
+  systemPromptSections: AssistantFormState['systemPromptSections']
+  attachmentInlineCapMode: AssistantFormState['attachmentInlineCapMode']
+  attachmentInlineCapChars: number
   contextOverrideEnabled: boolean
   contextCompressEnabled: boolean
   contextTruncateThreshold: number
@@ -140,6 +164,10 @@ function defaultValuesForAssistant(resource: AssistantEditDialogResource): Assis
     enableMaxToolCalls: form.enableMaxToolCalls,
     customParameters: form.customParameters.map((parameter) => ({ ...parameter })),
     mcpMode: form.mcpMode,
+    stripReasoningInHistory: form.stripReasoningInHistory,
+    systemPromptSections: { ...form.systemPromptSections },
+    attachmentInlineCapMode: form.attachmentInlineCapMode,
+    attachmentInlineCapChars: form.attachmentInlineCapChars,
     contextOverrideEnabled: form.contextOverrideEnabled,
     contextCompressEnabled: form.contextCompressEnabled,
     contextTruncateThreshold: form.contextTruncateThreshold,
@@ -180,6 +208,10 @@ function buildAssistantFormState(baseline: AssistantFormState, values: Assistant
     enableMaxToolCalls: values.enableMaxToolCalls,
     customParameters: values.customParameters,
     mcpMode: values.mcpMode,
+    stripReasoningInHistory: values.stripReasoningInHistory,
+    systemPromptSections: values.systemPromptSections,
+    attachmentInlineCapMode: values.attachmentInlineCapMode,
+    attachmentInlineCapChars: values.attachmentInlineCapChars,
     contextOverrideEnabled: values.contextOverrideEnabled,
     contextCompressEnabled: values.contextCompressEnabled,
     contextTruncateThreshold: values.contextTruncateThreshold,
@@ -584,30 +616,188 @@ function AssistantPromptField({
   )
 
   return (
-    <FormField
-      control={form.control}
-      name="prompt"
-      render={({ field }) => (
-        <PromptEditorField
-          label={
-            <FieldLabelWithHelp
-              label={t('library.config.prompt.label')}
-              helpTrigger={<PromptVariablesPopover portalContainer={portalContainer} />}
-              formLabel={false}
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      {/* The editor fills whatever the sections panel below leaves, never less than its floor. */}
+      <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: EDIT_DIALOG_PROMPT_MIN_HEIGHT }}>
+        <FormField
+          control={form.control}
+          name="prompt"
+          render={({ field }) => (
+            <PromptEditorField
+              label={
+                <FieldLabelWithHelp
+                  label={t('library.config.prompt.label')}
+                  helpTrigger={<PromptVariablesPopover portalContainer={portalContainer} />}
+                  formLabel={false}
+                />
+              }
+              value={field.value}
+              onChange={handlePromptChange}
+              placeholder={t('library.config.prompt.placeholder')}
+              previewValue={processedPrompt || prompt}
+              resetPreviewKey={resetPreviewKey}
+              actions={promptActions}
+              fill
+              minHeight={EDIT_DIALOG_PROMPT_MIN_HEIGHT}
+              maxHeight={EDIT_DIALOG_PROMPT_MAX_HEIGHT}
             />
-          }
-          value={field.value}
-          onChange={handlePromptChange}
-          placeholder={t('library.config.prompt.placeholder')}
-          previewValue={processedPrompt || prompt}
-          resetPreviewKey={resetPreviewKey}
-          actions={promptActions}
-          fill
-          minHeight={EDIT_DIALOG_PROMPT_MIN_HEIGHT}
-          maxHeight={EDIT_DIALOG_PROMPT_MAX_HEIGHT}
+          )}
         />
-      )}
-    />
+      </div>
+      {/* Bounded and self-scrolling: expanding a section must not squeeze the prompt editor. */}
+      <div className="max-h-[45%] shrink-0 overflow-y-auto border-border-subtle border-t pt-3 pr-1">
+        <SystemPromptSectionsField form={form} portalContainer={portalContainer} />
+      </div>
+    </div>
+  )
+}
+
+function SystemPromptSectionsField({
+  form,
+  portalContainer
+}: {
+  form: UseFormReturn<AssistantEditFormValues>
+  portalContainer: HTMLElement | null
+}) {
+  const { t } = useTranslation()
+  const value = form.watch('systemPromptSections')
+  const [presets, setPresets] = usePreference('chat.system_prompt_sections.presets')
+  const [savePresetOpen, setSavePresetOpen] = useState(false)
+  const presetList = presets ?? []
+  const overriddenCount = SYSTEM_PROMPT_SECTION_IDS.filter((id) => value[id] !== undefined).length
+
+  const commit = (next: AssistantEditFormValues['systemPromptSections']) =>
+    form.setValue('systemPromptSections', next, { shouldDirty: true, shouldTouch: true })
+  const setSection = (id: SystemPromptSectionId, text: string) => commit({ ...value, [id]: text })
+  const resetSection = (id: SystemPromptSectionId) => {
+    const { [id]: _dropped, ...rest } = value
+    commit(rest)
+  }
+  const savePreset = async (name: string) =>
+    setPresets([...presetList, { id: crypto.randomUUID(), name, sections: { ...value } }])
+  const applyPreset = (id: string) => {
+    const preset = presetList.find((item) => item.id === id)
+    if (preset) commit({ ...preset.sections })
+  }
+  const deletePreset = (id: string) => setPresets(presetList.filter((item) => item.id !== id))
+
+  const statusOf = (id: SystemPromptSectionId): 'default' | 'modified' | 'disabled' => {
+    const override = value[id]
+    if (override === undefined) return 'default'
+    return override === '' ? 'disabled' : 'modified'
+  }
+
+  return (
+    <FormItem>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <FieldLabelWithHelp
+            label={t('library.config.prompt.sections.title')}
+            help={t('library.config.prompt.sections.hint')}
+            formLabel={false}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="secondary" size="sm" className="h-7 gap-1 px-2.5 text-xs">
+                {t('library.config.basic.custom_params_presets')}
+                <ChevronDown size={11} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48" portalContainer={portalContainer}>
+              <DropdownMenuLabel>{t('library.config.basic.custom_params_preset_apply')}</DropdownMenuLabel>
+              {presetList.length === 0 ? (
+                <DropdownMenuItem disabled>{t('library.config.basic.custom_params_preset_empty')}</DropdownMenuItem>
+              ) : (
+                presetList.map((preset) => (
+                  <DropdownMenuItem key={preset.id} onSelect={() => applyPreset(preset.id)}>
+                    {preset.name}
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={overriddenCount === 0} onSelect={() => setSavePresetOpen(true)}>
+                <BookmarkPlus />
+                {t('library.config.basic.custom_params_preset_save')}
+              </DropdownMenuItem>
+              {presetList.length > 0 ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Trash2 />
+                    {t('library.config.basic.custom_params_preset_delete')}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {presetList.map((preset) => (
+                      <DropdownMenuItem key={preset.id} onSelect={() => deletePreset(preset.id)}>
+                        {preset.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <Accordion type="multiple" className="mt-2 rounded-xs border border-border-subtle">
+        {SYSTEM_PROMPT_SECTION_IDS.map((id) => {
+          const status = statusOf(id)
+          return (
+            <AccordionItem key={id} value={id} className="px-3">
+              <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate">{t(`library.config.prompt.sections.${id}.label`)}</span>
+                  <Badge variant="outline" className="shrink-0 font-normal text-[11px]">
+                    {t(`library.config.prompt.sections.${id}.when`)}
+                  </Badge>
+                  {status !== 'default' ? (
+                    <Badge
+                      variant={status === 'disabled' ? 'destructive' : 'secondary'}
+                      className="shrink-0 text-[11px]">
+                      {t(`library.config.prompt.sections.status.${status}`)}
+                    </Badge>
+                  ) : null}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-2 pb-3">
+                <div className="flex items-center justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    disabled={status === 'default'}
+                    onClick={() => resetSection(id)}>
+                    <RotateCcw size={11} />
+                    {t('library.config.prompt.sections.restore')}
+                  </Button>
+                </div>
+                <Textarea.Input
+                  aria-label={t(`library.config.prompt.sections.${id}.label`)}
+                  value={value[id] ?? SYSTEM_PROMPT_SECTION_DEFAULTS[id]}
+                  onChange={(event) => setSection(id, event.target.value)}
+                  placeholder={t('library.config.prompt.sections.placeholder')}
+                  rows={6}
+                  className="font-mono text-xs"
+                />
+              </AccordionContent>
+            </AccordionItem>
+          )
+        })}
+      </Accordion>
+
+      <CreateGroupDialog
+        open={savePresetOpen}
+        onOpenChange={setSavePresetOpen}
+        onCreate={savePreset}
+        title={t('library.config.basic.custom_params_preset_save_title')}
+        namePlaceholder={t('library.config.basic.custom_params_preset_name')}
+        nameRequiredMessage={t('library.config.basic.custom_params_preset_name_required')}
+        submitLabel={t('common.save')}
+      />
+    </FormItem>
   )
 }
 
@@ -821,6 +1011,32 @@ function AssistantAdvancedFields({
         )}
       />
 
+      <FormField
+        control={form.control}
+        name="stripReasoningInHistory"
+        render={({ field }) => (
+          <FormItem>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <FieldLabelWithHelp
+                  label={t('library.config.basic.strip_reasoning_in_history')}
+                  help={t('library.config.basic.field.strip_reasoning_in_history.hint')}
+                />
+              </div>
+              <FormControl>
+                <Switch
+                  size="sm"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  aria-label={t('library.config.basic.strip_reasoning_in_history')}
+                />
+              </FormControl>
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <ToggleFieldGroup
         label={t('library.config.basic.max_tool_calls')}
         valueLabel={
@@ -956,6 +1172,66 @@ function ContextManagementFields({
                 onBlur={(value) => field.onChange(value === null ? null : Math.floor(value))}
               />
             </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="attachmentInlineCapMode"
+        render={({ field }) => (
+          <FormItem>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <FieldLabelWithHelp
+                  label={t('library.config.basic.attachment_inline_cap')}
+                  help={t('library.config.basic.field.attachment_inline_cap.hint')}
+                />
+              </div>
+              <FormControl>
+                <SegmentedControl<AssistantEditFormValues['attachmentInlineCapMode']>
+                  size="sm"
+                  className="shrink-0"
+                  aria-label={t('library.config.basic.attachment_inline_cap')}
+                  value={field.value}
+                  onValueChange={(mode) => form.setValue('attachmentInlineCapMode', mode, { shouldDirty: true })}
+                  options={[
+                    { value: 'default', label: t('library.config.basic.attachment_inline_cap_default') },
+                    { value: 'custom', label: t('library.config.basic.attachment_inline_cap_custom') },
+                    { value: 'unlimited', label: t('library.config.basic.attachment_inline_cap_unlimited') }
+                  ]}
+                />
+              </FormControl>
+            </div>
+            {field.value === 'custom' ? (
+              <FormField
+                control={form.control}
+                name="attachmentInlineCapChars"
+                render={({ field: chars }) => (
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <InputNumber
+                      min={1}
+                      step={1000}
+                      aria-label={t('library.config.basic.attachment_inline_cap_chars')}
+                      className="h-8 w-40 rounded-lg px-2.5"
+                      value={chars.value}
+                      onBlur={(next) =>
+                        chars.onChange(typeof next === 'number' && next > 0 ? Math.round(next) : READ_FILE_PAGE_SIZE)
+                      }
+                    />
+                    <span className="text-muted-foreground text-xs">
+                      {t('library.config.basic.attachment_inline_cap_chars')}
+                    </span>
+                  </div>
+                )}
+              />
+            ) : null}
+            {field.value === 'unlimited' ? (
+              <p className="mt-2 text-destructive text-xs">
+                {t('library.config.basic.attachment_inline_cap_unlimited_warning')}
+              </p>
+            ) : null}
             <FormMessage />
           </FormItem>
         )}
@@ -1149,6 +1425,20 @@ function CustomParametersField({
   portalContainer: HTMLElement | null
 }) {
   const { t } = useTranslation()
+  const [presets, setPresets] = usePreference('chat.custom_parameters.presets')
+  const [savePresetOpen, setSavePresetOpen] = useState(false)
+  const presetList = presets ?? []
+  const savePreset = async (name: string) => {
+    // Snapshot, not a live reference: editing the assistant afterwards must not
+    // rewrite the saved preset.
+    const parameters = value.map((parameter) => ({ ...parameter }))
+    await setPresets([...presetList, { id: crypto.randomUUID(), name, parameters }])
+  }
+  const applyPreset = (id: string) => {
+    const preset = presetList.find((item) => item.id === id)
+    if (preset) onChange(preset.parameters.map((parameter) => ({ ...parameter })))
+  }
+  const deletePreset = (id: string) => setPresets(presetList.filter((item) => item.id !== id))
   const add = () => onChange([...value, { name: '', type: 'string', value: '' }])
   const remove = (index: number) => onChange(value.filter((_, i) => i !== index))
   const updateField = (index: number, patch: Partial<CustomParameter>) => {
@@ -1174,11 +1464,63 @@ function CustomParametersField({
             help={t('library.config.basic.field.custom_params.hint')}
           />
         </div>
-        <Button type="button" variant="secondary" size="sm" onClick={add} className="h-7 gap-1 px-2.5 text-xs">
-          <Sparkles size={11} />
-          {t('library.config.basic.custom_params_add')}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="secondary" size="sm" className="h-7 gap-1 px-2.5 text-xs">
+                {t('library.config.basic.custom_params_presets')}
+                <ChevronDown size={11} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48" portalContainer={portalContainer}>
+              <DropdownMenuLabel>{t('library.config.basic.custom_params_preset_apply')}</DropdownMenuLabel>
+              {presetList.length === 0 ? (
+                <DropdownMenuItem disabled>{t('library.config.basic.custom_params_preset_empty')}</DropdownMenuItem>
+              ) : (
+                presetList.map((preset) => (
+                  <DropdownMenuItem key={preset.id} onSelect={() => applyPreset(preset.id)}>
+                    {preset.name}
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={value.length === 0} onSelect={() => setSavePresetOpen(true)}>
+                <BookmarkPlus />
+                {t('library.config.basic.custom_params_preset_save')}
+              </DropdownMenuItem>
+              {presetList.length > 0 ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Trash2 />
+                    {t('library.config.basic.custom_params_preset_delete')}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {presetList.map((preset) => (
+                      <DropdownMenuItem key={preset.id} onSelect={() => deletePreset(preset.id)}>
+                        {preset.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button type="button" variant="secondary" size="sm" onClick={add} className="h-7 gap-1 px-2.5 text-xs">
+            <Sparkles size={11} />
+            {t('library.config.basic.custom_params_add')}
+          </Button>
+        </div>
       </div>
+
+      <CreateGroupDialog
+        open={savePresetOpen}
+        onOpenChange={setSavePresetOpen}
+        onCreate={savePreset}
+        title={t('library.config.basic.custom_params_preset_save_title')}
+        namePlaceholder={t('library.config.basic.custom_params_preset_name')}
+        nameRequiredMessage={t('library.config.basic.custom_params_preset_name_required')}
+        submitLabel={t('common.save')}
+      />
 
       {value.length > 0 ? (
         <div className="mt-2 space-y-2">

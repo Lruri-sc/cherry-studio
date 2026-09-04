@@ -1,4 +1,6 @@
+import type { SystemPromptSectionsOverride } from '@shared/ai/systemPromptSections'
 import type { BootConfigPreferenceKeys } from '@shared/data/bootConfig/bootConfigTypes'
+import type { AssistantSettings } from '@shared/data/types/assistant'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { ShortcutBinding } from '@shared/utils/shortcut'
 import * as z from 'zod'
@@ -22,6 +24,20 @@ export type UnifiedPreferenceMultipleResultType<K extends UnifiedPreferenceKeyTy
 
 export type PreferenceUpdateOptions = {
   optimistic: boolean
+}
+
+/** A named, reusable set of assistant custom parameters. */
+export type CustomParameterPreset = {
+  id: string
+  name: string
+  parameters: AssistantSettings['customParameters']
+}
+
+/** A named, reusable set of Cherry system-prompt section overrides. */
+export type SystemPromptSectionsPreset = {
+  id: string
+  name: string
+  sections: SystemPromptSectionsOverride
 }
 
 export type PreferenceShortcutType = {

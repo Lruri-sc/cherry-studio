@@ -24,7 +24,8 @@ import { lazy, Suspense, useEffect, useMemo } from 'react'
 import { useAppUpdateHandler } from './hooks/useAppUpdateHandler'
 import { useAutoBackupEvents } from './hooks/useAutoBackupEvents'
 import { useTopicNamingErrorNotification } from './hooks/useTopicNamingErrorNotification'
-import { PrivacyPolicyUpdateGate } from './privacy/PrivacyPolicyUpdateGate'
+// Fork: privacy-policy re-consent gate removed — analytics is disabled outright, so there is nothing to consent to.
+// import { PrivacyPolicyUpdateGate } from './privacy/PrivacyPolicyUpdateGate'
 
 const logger = loggerService.withContext('MainApp')
 const OnboardingPage = lazy(() => import('./onboarding/OnboardingPage'))
@@ -118,7 +119,7 @@ export function MainWindowContent(): React.ReactElement {
         <ConversationNotificationRuntime />
         <PopupHost />
         <ToastHost />
-        {providerSetupStatus === 'pending' ? null : <PrivacyPolicyUpdateGate />}
+        {/* {providerSetupStatus === 'pending' ? null : <PrivacyPolicyUpdateGate />} */}
       </MandatoryGateProvider>
     </TabsProvider>
   )

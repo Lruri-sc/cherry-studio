@@ -1,6 +1,15 @@
 import { normalizeHeaders } from '@ai-sdk/provider-utils'
+import type { Provider } from '@shared/data/types/provider'
+import { matchesPreset } from '@shared/utils/provider'
+import { SystemProviderIds } from '@shared/utils/systemProviderId'
 
-export const defaultAppHeaders = () => {
+/**
+ * App-attribution headers. Fork: sent only to OpenRouter, the one provider
+ * that consumes them (app leaderboard / usage attribution). Everywhere else
+ * they were a client fingerprint with no function.
+ */
+export const defaultAppHeaders = (provider?: Pick<Provider, 'id' | 'presetProviderId'>): Record<string, string> => {
+  if (!provider || !matchesPreset(provider, SystemProviderIds.openrouter)) return {}
   return {
     'HTTP-Referer': 'https://cherry-ai.com',
     'X-Title': 'Cherry Studio'

@@ -5,7 +5,7 @@ The catalog of AI **models** (what exists) and **providers** (how to reach them)
 Reasoning controls have an additional model-capability/request-encoding boundary documented in
 [reasoning-control.md](./reasoning-control.md).
 
-> The three `data/*.json` files are **pure artifacts**. Never hand-edit them — edit the source and run `pnpm generate`. See [../CLAUDE.md](../CLAUDE.md).
+> The three `data/*.json` files are **pure artifacts**. Never hand-edit them — edit the source and run `pnpm generate`. See [../README.md](../README.md).
 
 ## Data flow
 

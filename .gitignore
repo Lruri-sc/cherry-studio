@@ -95,3 +95,13 @@ YOUR_MEMORY_FILE_PATH
 .sessions/
 .devtools
 .omo/
+
+# fork: agent instruction files and personal working notes stay local, never in the repo
+CLAUDE.md
+AGENTS.md
+.claude/
+.agents/
+packages/provider-registry/CLAUDE.md
+PLAN.md
+FORK.md
+verify-continuation.sh

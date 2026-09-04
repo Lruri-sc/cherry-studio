@@ -4,7 +4,7 @@ import { loggerService } from '@logger'
 import { createLatestReconciler, type LatestReconciler } from '@main/core/concurrency/latestReconciler'
 import { type Activatable, BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { generateUserAgent, getClientId } from '@main/utils/systemInfo'
-import { APP_NAME, LATEST_PRIVACY_POLICY_VERSION } from '@shared/utils/constants'
+import { APP_NAME } from '@shared/utils/constants'
 import { app } from 'electron'
 
 const logger = loggerService.withContext('AnalyticsService')
@@ -38,9 +38,13 @@ export class AnalyticsService extends BaseService implements Activatable {
 
   private refreshDesiredEnabled(): void {
     const preferenceService = application.get('PreferenceService')
-    this.desiredEnabled =
-      preferenceService.get('app.privacy.data_collection.enabled') &&
-      preferenceService.get('app.privacy.policy_version') === LATEST_PRIVACY_POLICY_VERSION
+    // Fork: anonymous usage reporting to analytics.cherry-ai.com is disabled
+    // outright; the preferences below are still read so a future re-enable is one line.
+    void preferenceService
+    this.desiredEnabled = false
+    // this.desiredEnabled =
+    //   preferenceService.get('app.privacy.data_collection.enabled') &&
+    //   preferenceService.get('app.privacy.policy_version') === LATEST_PRIVACY_POLICY_VERSION
     this.reconciler.request()
   }
 

@@ -1,6 +1,6 @@
 import { application } from '@application'
 import { loggerService } from '@logger'
-import { net } from 'electron'
+import { app } from 'electron'
 
 const logger = loggerService.withContext('RegionService')
 
@@ -9,7 +9,7 @@ const CACHE_KEY = 'region.egressCountry'
 // system-level VPN toggle that keeps the primary interface "online". Proxy
 // changes made through the app invalidate sooner via the appliedProxyKey guard.
 const CACHE_TTL = 10 * 60 * 1000
-const REQUEST_TIMEOUT = 5000
+// const REQUEST_TIMEOUT = 5000 // only used by the commented-out ipinfo lookup
 const DEFAULT_COUNTRY = 'CN'
 
 type CachedEgressRegion = {
@@ -63,31 +63,44 @@ class RegionService {
     }
   }
 
+  /**
+   * Fork: no network geolocation. The upstream implementation below asked
+   * api.ipinfo.io (third party, hardcoded token, not gated by the privacy
+   * switch) for the egress country; consumers only use the answer to pick a
+   * download mirror, so the OS locale is a good enough offline signal.
+   */
   private async fetchCountry(): Promise<string> {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
-
-    try {
-      const response = await net.fetch('https://api.ipinfo.io/lite/me?token=5aa4105b40adbc', {
-        signal: controller.signal
-      })
-
-      if (!response.ok) {
-        throw new Error(`IP info request failed with HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      const country = data.country_code
-      if (!country) {
-        throw new Error('IP info response missing country_code')
-      }
-
-      logger.info(`Detected user IP address country: ${country}`)
-      return country
-    } finally {
-      clearTimeout(timeoutId)
-    }
+    const country = app.getLocaleCountryCode()
+    if (!country) throw new Error('OS locale has no country code')
+    logger.info(`Using OS locale country: ${country}`)
+    return country
   }
+
+  // private async fetchCountry(): Promise<string> {
+  //   const controller = new AbortController()
+  //   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+  //
+  //   try {
+  //     const response = await net.fetch('https://api.ipinfo.io/lite/me?token=5aa4105b40adbc', {
+  //       signal: controller.signal
+  //     })
+  //
+  //     if (!response.ok) {
+  //       throw new Error(`IP info request failed with HTTP ${response.status}`)
+  //     }
+  //
+  //     const data = await response.json()
+  //     const country = data.country_code
+  //     if (!country) {
+  //       throw new Error('IP info response missing country_code')
+  //     }
+  //
+  //     logger.info(`Detected user IP address country: ${country}`)
+  //     return country
+  //   } finally {
+  //     clearTimeout(timeoutId)
+  //   }
+  // }
 }
 
 export const regionService = new RegionService()

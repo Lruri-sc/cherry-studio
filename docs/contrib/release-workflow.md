@@ -9,7 +9,6 @@ sources:
   - .github/workflows/post-release.yml
   - .github/workflows/publish-release.yml
   - .github/workflows/ci.yml
-  - .agents/skills/prepare-release/SKILL.md
   - electron-builder.cn.config.cjs
 ---
 

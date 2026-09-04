@@ -1,4 +1,5 @@
 import type { NativeFileSupport } from '@main/ai/runtime/aiSdk/params/nativeFileSupport'
+import type { AttachmentInlineCap } from '@shared/data/types/assistant'
 import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 import type { UIMessage } from 'ai'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -49,14 +50,15 @@ const charTokenizer = { id: 'chars', count: (text: string) => text.length }
 const run = (
   parts: CherryMessagePart[],
   ns: NativeFileSupport,
-  opts: { isToolCapable?: boolean; cap?: number } = {}
+  opts: { isToolCapable?: boolean; cap?: number; inlineCap?: AttachmentInlineCap } = {}
 ) => {
   const messages = [userMessage(parts)] as UIMessage[]
   return prepareChatMessages(messages, {
     attachments: collectFileAttachments(messages),
     nativeSupport: ns,
     isToolCapable: opts.isToolCapable ?? true,
-    budget: opts.cap === undefined ? undefined : { tokens: opts.cap, tokenizer: charTokenizer }
+    budget: opts.cap === undefined ? undefined : { tokens: opts.cap, tokenizer: charTokenizer },
+    inlineCap: opts.inlineCap
   })
 }
 
@@ -209,6 +211,29 @@ describe('prepareChatMessages — routing', () => {
     const text = textOf(out.parts)[0]
     expect(text).toContain('[Truncated 5/10 chars.]')
     expect(text).not.toContain('read_file')
+  })
+
+  it('an assistant custom cap overrides the shared pool', async () => {
+    getByIdMock.mockResolvedValueOnce({ ext: 'txt' })
+    extractMock.mockResolvedValueOnce('0123456789')
+    const [out] = await run([fileWithEntry('e1', 'a.txt', 'text/plain')], NONE, {
+      isToolCapable: false,
+      cap: 2,
+      inlineCap: { mode: 'custom', chars: 7 }
+    })
+    expect(textOf(out.parts)[0]).toContain('[Truncated 7/10 chars.]')
+  })
+
+  it('an assistant "unlimited" policy inlines the whole text despite a tiny pool', async () => {
+    getByIdMock.mockResolvedValueOnce({ ext: 'txt' })
+    extractMock.mockResolvedValueOnce('0123456789')
+    const [out] = await run([fileWithEntry('e1', 'a.txt', 'text/plain')], NONE, {
+      cap: 2,
+      inlineCap: { mode: 'unlimited' }
+    })
+    const text = textOf(out.parts)[0]
+    expect(text).toContain('0123456789')
+    expect(text).not.toContain('Truncated')
   })
 
   // The cap used to be per file, so two attachments cost twice the cap and

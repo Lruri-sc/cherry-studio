@@ -571,8 +571,10 @@ export class AiService extends BaseService {
       isToolCapable: isFunctionCallingModel(model),
       // A caller that owns its context (the gateway) manages its own window;
       // reshaping its attachments against ours would be guesswork.
+      inlineCap: assistant?.settings.attachmentInlineCap,
+      // An explicit assistant policy makes the window-priced pool moot — skip estimating it.
       budget:
-        fileAttachments.length && request.contextOwner !== 'caller'
+        fileAttachments.length && request.contextOwner !== 'caller' && !assistant?.settings.attachmentInlineCap
           ? ((await resolveAttachmentBudget({
               provider,
               model,

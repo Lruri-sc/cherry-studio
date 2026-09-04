@@ -723,7 +723,10 @@ function deriveRouteFacts(
   // that rotate onto different keys still sign identically. Include request headers because they
   // are also fixed at subprocess spawn; editing either input invalidates warm reuse.
   const enabledKeys = providerService.getApiKeys(primaryProvider.id, { enabled: true }).map((entry) => entry.key)
-  const customHeaders = mergeAnthropicCustomHeaders(defaultAppHeaders(), getExtraHeaders(primaryProvider))
+  const customHeaders = mergeAnthropicCustomHeaders(
+    defaultAppHeaders(primaryProvider),
+    getExtraHeaders(primaryProvider)
+  )
   // Every slot resolves to the same `anthropicBaseUrl`, so one host check gates them all. Decide
   // first-party by resolved host, NOT preset origin: a provider copied from the Anthropic preset but
   // repointed at a custom 1M proxy is not first-party and must still get the `[1m]` suffix.
@@ -797,7 +800,10 @@ async function resolveClaudeCodeRuntimeRoute(
       return {
         ...facts,
         apiKey: runtimeApiKey,
-        customHeaders: mergeAnthropicCustomHeaders(defaultAppHeaders(), getExtraHeaders(primaryProvider)),
+        customHeaders: mergeAnthropicCustomHeaders(
+          defaultAppHeaders(primaryProvider),
+          getExtraHeaders(primaryProvider)
+        ),
         usageCapture: {
           owner: 'agent-sdk',
           credentialReceipt: resolvedApiKey.apiKeySelection,

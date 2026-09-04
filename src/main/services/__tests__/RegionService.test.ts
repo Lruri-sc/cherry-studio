@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const CACHE_KEY = 'region.egressCountry'
-
-// Hoisted shared state so the vi.mock factories can close over it: the proxy
-// key is mutated per-test to exercise cache invalidation, and net.fetch is the
-// single geolocation transport under test.
-const { netFetchMock, proxyState } = vi.hoisted(() => ({
+// Fork: the country comes from the OS locale, never from a geolocation service.
+// `net.fetch` stays mocked only so the test can prove it is never touched.
+const { netFetchMock, localeCountryMock } = vi.hoisted(() => ({
   netFetchMock: vi.fn(),
-  proxyState: { appliedProxyKey: 'direct||' as string | null }
+  localeCountryMock: vi.fn<() => string>()
 }))
 
 vi.mock('@logger', () => ({
@@ -17,23 +14,16 @@ vi.mock('@logger', () => ({
 }))
 
 vi.mock('electron', () => ({
+  app: { getLocaleCountryCode: localeCountryMock },
   net: { fetch: netFetchMock }
 }))
 
-// Unified application mock provides a real Map-backed CacheService; ProxyService
-// is not a default service, so wrap `get` to return our controllable stub.
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
   const result = mockApplicationFactory()
   const originalGet = result.application.get.getMockImplementation()!
   result.application.get.mockImplementation((name: string) => {
-    if (name === 'ProxyService') {
-      return {
-        get appliedProxyKey() {
-          return proxyState.appliedProxyKey
-        }
-      }
-    }
+    if (name === 'ProxyService') return { appliedProxyKey: 'direct||' }
     return originalGet(name)
   })
   return result
@@ -43,100 +33,40 @@ import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
 
 import { regionService } from '../RegionService'
 
-const fetchResponse = (body: unknown, init: { ok?: boolean; status?: number } = {}) => ({
-  ok: init.ok ?? true,
-  status: init.status ?? 200,
-  json: async () => body
-})
-
-describe('RegionService', () => {
+describe('RegionService (offline)', () => {
   beforeEach(() => {
     MockMainCacheServiceUtils.resetMocks()
     netFetchMock.mockReset()
-    proxyState.appliedProxyKey = 'direct||'
+    localeCountryMock.mockReset()
   })
 
-  it('fetches the egress country and caches it for subsequent calls', async () => {
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'US' }))
-
-    await expect(regionService.getCountry()).resolves.toBe('US')
-    // Second call is served from cache — no second network request.
-    await expect(regionService.getCountry()).resolves.toBe('US')
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  it('never contacts a geolocation service', async () => {
+    localeCountryMock.mockReturnValue('US')
+    await regionService.getCountry()
+    await regionService.isInChina()
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('reports isInChina based on the detected country', async () => {
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'cn' }))
+  it('reads the country from the OS locale and caches it', async () => {
+    localeCountryMock.mockReturnValue('US')
+    await expect(regionService.getCountry()).resolves.toBe('US')
+    await expect(regionService.getCountry()).resolves.toBe('US')
+    expect(localeCountryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports isInChina case-insensitively', async () => {
+    localeCountryMock.mockReturnValue('cn')
     await expect(regionService.isInChina()).resolves.toBe(true)
 
     MockMainCacheServiceUtils.resetMocks()
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'JP' }))
+    localeCountryMock.mockReturnValue('JP')
     await expect(regionService.isInChina()).resolves.toBe(false)
   })
 
-  it('does not cache the CN fallback when the request fails', async () => {
-    netFetchMock
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce(fetchResponse({ country_code: 'US' }))
-
+  it('falls back to CN when the locale has no country, without caching the fallback', async () => {
+    localeCountryMock.mockReturnValueOnce('').mockReturnValueOnce('US')
     await expect(regionService.getCountry()).resolves.toBe('CN')
+    // A later, valid answer must win — the fallback was not written to the cache.
     await expect(regionService.getCountry()).resolves.toBe('US')
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not cache the CN fallback when the response has no country_code', async () => {
-    netFetchMock.mockResolvedValueOnce(fetchResponse({})).mockResolvedValueOnce(fetchResponse({ country_code: 'US' }))
-
-    await expect(regionService.getCountry()).resolves.toBe('CN')
-    await expect(regionService.getCountry()).resolves.toBe('US')
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('treats HTTP non-ok responses as retryable failures', async () => {
-    netFetchMock
-      .mockResolvedValueOnce(fetchResponse({ country_code: 'US' }, { ok: false, status: 500 }))
-      .mockResolvedValueOnce(fetchResponse({ country_code: 'JP' }))
-
-    await expect(regionService.getCountry()).resolves.toBe('CN')
-    await expect(regionService.getCountry()).resolves.toBe('JP')
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('re-detects when the applied proxy key changes (egress may have moved)', async () => {
-    proxyState.appliedProxyKey = 'fixed_servers|http://proxy-us|'
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'US' }))
-    await expect(regionService.getCountry()).resolves.toBe('US')
-
-    // Proxy changed → egress IP may differ → cached value is no longer trusted.
-    proxyState.appliedProxyKey = 'direct||'
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'CN' }))
-    await expect(regionService.getCountry()).resolves.toBe('CN')
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('re-detects after the cached entry expires (TTL backstop)', async () => {
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'US' }))
-    await expect(regionService.getCountry()).resolves.toBe('US')
-
-    MockMainCacheServiceUtils.simulateCacheExpiration(CACHE_KEY)
-    netFetchMock.mockResolvedValue(fetchResponse({ country_code: 'CN' }))
-    await expect(regionService.getCountry()).resolves.toBe('CN')
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('single-flights concurrent detections into one request', async () => {
-    let resolveFetch: (value: unknown) => void = () => {}
-    netFetchMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveFetch = resolve
-      })
-    )
-
-    const first = regionService.getCountry()
-    const second = regionService.getCountry()
-    resolveFetch(fetchResponse({ country_code: 'JP' }))
-
-    await expect(Promise.all([first, second])).resolves.toEqual(['JP', 'JP'])
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 })

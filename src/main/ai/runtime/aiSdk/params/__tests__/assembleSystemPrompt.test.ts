@@ -180,6 +180,63 @@ describe('assembleSystemPrompt', () => {
     expect(out).toContain('Do not substitute dates remembered from training')
   })
 
+  it('uses an assistant override in place of the citations default', async () => {
+    const out = await assembleSystemPrompt({
+      assistant: makeAssistant({
+        prompt: 'base',
+        settings: { ...makeAssistant().settings, systemPromptSections: { citations: 'CITE LIKE THIS' } }
+      }),
+      model,
+      hasCitableTools: true
+    })
+    expect(out).toContain('CITE LIKE THIS')
+    expect(out).not.toContain('<citations>')
+  })
+
+  it('an empty override removes the section even when its trigger holds', async () => {
+    const out = await assembleSystemPrompt({
+      assistant: makeAssistant({
+        prompt: 'base',
+        settings: { ...makeAssistant().settings, systemPromptSections: { citations: '' } }
+      }),
+      model,
+      hasCitableTools: true
+    })
+    expect(out).toBe('base')
+  })
+
+  it('keeps the live namespace inventory when a deferred-tools override uses {{namespaces}}', async () => {
+    const out = await assembleSystemPrompt({
+      assistant: makeAssistant({
+        prompt: 'base',
+        settings: {
+          ...makeAssistant().settings,
+          systemPromptSections: { deferredTools: 'MY GUIDE\n{{namespaces}}' }
+        }
+      }),
+      model,
+      tools: { tool_search: {} } as unknown as ToolSet,
+      deferredEntries: [{ name: 'mcp__gh__a', namespace: 'mcp:gh' }] as never
+    })
+    expect(out).toContain('MY GUIDE')
+    expect(out).toContain('<namespace name="mcp:gh" count="1"/>')
+    expect(out).not.toContain('<usage>')
+  })
+
+  it('fills {{date}} in a web-search-date override from the request clock', async () => {
+    const out = await assembleSystemPrompt({
+      assistant: makeAssistant({
+        prompt: 'base',
+        settings: { ...makeAssistant().settings, systemPromptSections: { webSearchDate: 'Today is {{date}}.' } }
+      }),
+      model,
+      webSearchEnabled: true,
+      now: new Date(2026, 7, 20, 23, 59)
+    })
+    expect(out).toContain('Today is 2026-08-20.')
+    expect(out).not.toContain('<current-date>')
+  })
+
   it('does not add volatile date context when web search is unavailable', async () => {
     const out = await assembleSystemPrompt({
       assistant: makeAssistant({ prompt: 'base' }),

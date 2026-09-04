@@ -1,3 +1,40 @@
+> **这是 [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 的一个自用 fork，基线 v2.0.12。**
+> 目标只有一个：把上游写死在代码里的行为决策，交还给用户——按助手粒度可配、可恢复默认、可存预设；
+> 同时去掉所有不必要的外发请求。
+
+## 这个 fork 改了什么
+
+### 新增的助手级设置（编辑助手 → 各页签）
+
+| 设置 | 位置 | 说明 |
+|---|---|---|
+| **不重发思考内容** | 模型 | 关闭后，模型的思考过程不再随历史回传给下一轮（长对话里这部分可占请求体 80%+）。仅对 OpenAI 兼容 chat-completions 端点生效——Anthropic / Gemini / Responses 类接口的回传是协议要求，会自动让路 |
+| **附件内联上限** | 模型 | 上游把每个附件提取出的文本内联进提示词时，模型未声明上下文窗口就固定截到 8000 字符，且非工具模型无法读到剩余部分。现在三态可选：**默认**（沿用上游）/ **自定义**（每文件 N 字符）/ **不限制**（全文内联，带爆窗警告） |
+| **Cherry 附加段** | 系统提示词 | 上游会在你的提示词之后按条件追加三段文本（延迟工具指引 / 引用规则 / 联网搜索日期）。现在每段可改、可留空禁用、可一键**恢复默认**——默认值在每次请求时按当时启用的工具与联网状态动态生成，不存副本。支持 `{{namespaces}}`、`{{date}}` 占位符 |
+| **预设** | 模型 / 系统提示词 | 自定义参数、Cherry 附加段都可以存为命名预设，跨助手应用与删除 |
+
+### 去掉的外发请求
+
+| 项 | 处理 |
+|---|---|
+| 匿名使用统计（`analytics.cherry-ai.com`） | 彻底关闭，设置页开关与隐私协议重新同意弹窗一并移除 |
+| 出口 IP 地理定位（`api.ipinfo.io`，第三方、硬编码 token、不受隐私开关约束） | 改为读系统区域设置，不联网 |
+| 自动更新检查（`releases.cherry-ai.com` + 更新源） | 关闭自动检查；设置里的手动「检查更新」保留 |
+| 每个模型请求携带的 `HTTP-Referer: cherry-ai.com` / `X-Title` 归因头 | 只发给 OpenRouter（唯一有用途的服务商），其余全部不发 |
+
+上游的本地功能（崩溃报告落盘、开发者模式调用链、诊断包手动上传）未受影响。
+
+### 打包与替换
+
+```bash
+pnpm install && pnpm rebuild:electron
+pnpm build:mac:arm64 -- -c.mac.type=development   # 用本机 Apple Development 证书签名，自用足够
+```
+
+产物在 `dist/`。`appId` / `productName` 与官方版一致，直接替换 `/Applications/Cherry Studio.app` 即接管原有数据，无需迁移。签名 Team ID 变化会让 macOS 要求重新授予辅助功能 / 麦克风权限；GitHub Copilot 登录态需重登（`safeStorage` 加密）；服务商 API key 不受影响。换回官方版时数据可直接复用，仅上述新增设置会被官方版忽略。
+
+---
+
 
 <h1 align="center">
   <a href="https://github.com/CherryHQ/cherry-studio/releases">
